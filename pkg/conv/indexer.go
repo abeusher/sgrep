@@ -1,0 +1,134 @@
+package conv
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/XiaoConstantine/sgrep/pkg/embed"
+)
+
+// Indexer handles indexing conversations.
+type Indexer struct {
+	store    *Store
+	embedder *embed.Embedder
+	chunker  *Chunker
+}
+
+// IndexerConfig configures the indexer.
+type IndexerConfig struct {
+	Store    *Store
+	Embedder *embed.Embedder
+	Chunker  *Chunker
+}
+
+// NewIndexer creates a new conversation indexer.
+func NewIndexer(cfg IndexerConfig) *Indexer {
+	chunker := cfg.Chunker
+	if chunker == nil {
+		chunker = NewChunker()
+	}
+
+	return &Indexer{
+		store:    cfg.Store,
+		embedder: cfg.Embedder,
+		chunker:  chunker,
+	}
+}
+
+// IndexResult contains the results of an indexing operation.
+type IndexResult struct {
+	Agent           AgentType
+	SessionsFound   int
+	SessionsIndexed int
+	TurnsIndexed    int
+	Errors          []error
+	Duration        time.Duration
+}
+
+// IndexSessions indexes a batch of parsed sessions.
+func (idx *Indexer) IndexSessions(ctx context.Context, sessions []*Session) (*IndexResult, error) {
+	startTime := time.Now()
+	result := &IndexResult{}
+
+	if len(sessions) > 0 {
+		result.Agent = sessions[0].Agent
+	}
+
+	for _, session := range sessions {
+		result.SessionsFound++
+
+		// Check if already indexed
+		exists, _ := idx.store.SessionExists(ctx, session.ID)
+		if exists {
+			continue
+		}
+
+		// Index the session
+		if err := idx.indexSession(ctx, session); err != nil {
+			result.Errors = append(result.Errors, fmt.Errorf("index session %s failed: %w", session.ID, err))
+			continue
+		}
+
+		result.SessionsIndexed++
+		result.TurnsIndexed += len(session.Turns)
+	}
+
+	result.Duration = time.Since(startTime)
+	return result, nil
+}
+
+// IndexSession indexes a single session.
+func (idx *Indexer) IndexSession(ctx context.Context, session *Session) error {
+	// Check if already indexed
+	exists, _ := idx.store.SessionExists(ctx, session.ID)
+	if exists {
+		return nil
+	}
+
+	return idx.indexSession(ctx, session)
+}
+
+// indexSession indexes a single session and its turns.
+func (idx *Indexer) indexSession(ctx context.Context, session *Session) error {
+	// Estimate tokens
+	session.TotalTokens = EstimateSessionTokens(session)
+
+	// Store session metadata and turns
+	if err := idx.store.StoreSession(ctx, session); err != nil {
+		return fmt.Errorf("failed to store session: %w", err)
+	}
+
+	// Generate and store embeddings for each turn
+	chunks := idx.chunker.ChunkSession(session)
+
+	// Batch process embeddings
+	batchSize := 10
+	for i := 0; i < len(chunks); i += batchSize {
+		end := i + batchSize
+		if end > len(chunks) {
+			end = len(chunks)
+		}
+		batch := chunks[i:end]
+
+		contents := make([]string, len(batch))
+		turnIDs := make([]string, len(batch))
+		for j, chunk := range batch {
+			contents[j] = chunk.Content
+			turnIDs[j] = chunk.ID
+		}
+
+		// Generate embeddings
+		embeddings, err := idx.embedder.EmbedBatch(ctx, contents)
+		if err != nil {
+			return fmt.Errorf("failed to generate embeddings: %w", err)
+		}
+
+		// Store embeddings
+		if err := idx.store.StoreTurnEmbeddingBatch(ctx, turnIDs, embeddings); err != nil {
+			return fmt.Errorf("failed to store embeddings: %w", err)
+		}
+	}
+
+	return nil
+}
