@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/XiaoConstantine/sgrep/pkg/conv"
-	_ "github.com/tursodatabase/go-libsql"
 )
 
 // CursorParser parses Cursor IDE conversation files.

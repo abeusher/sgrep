@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	_ "github.com/tursodatabase/go-libsql"
 )
 
 const (
@@ -51,14 +49,14 @@ func NewStore(cfg StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("failed to create store directory: %w", err)
 	}
 
-	// Use libSQL file prefix
+	// Build DSN based on driver
 	dsn := cfg.DBPath
-	if !strings.HasPrefix(dsn, "file:") {
+	if sqliteDriverName == "libsql" && !strings.HasPrefix(dsn, "file:") {
 		dsn = "file:" + dsn
 	}
 
 	// Open database
-	db, err := sql.Open("libsql", dsn)
+	db, err := sql.Open(sqliteDriverName, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
