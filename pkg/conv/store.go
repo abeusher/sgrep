@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
@@ -635,8 +636,22 @@ func (s *Store) GetStats(ctx context.Context) (*IndexStats, error) {
 		}
 	}
 
-	// Get last indexed time
-	_ = s.db.QueryRowContext(ctx, "SELECT MAX(created_at) FROM conv_sessions").Scan(&stats.LastIndexed)
+	// Get last indexed time - scan as string first since SQLite stores as TEXT
+	var lastIndexedStr sql.NullString
+	if err := s.db.QueryRowContext(ctx, "SELECT MAX(created_at) FROM conv_sessions").Scan(&lastIndexedStr); err == nil && lastIndexedStr.Valid {
+		// Try common SQLite timestamp formats
+		for _, layout := range []string{
+			"2006-01-02 15:04:05",
+			"2006-01-02T15:04:05Z",
+			"2006-01-02T15:04:05.000Z",
+			time.RFC3339,
+		} {
+			if t, err := time.Parse(layout, lastIndexedStr.String); err == nil {
+				stats.LastIndexed = t
+				break
+			}
+		}
+	}
 
 	// Get database size
 	if info, err := os.Stat(s.dbPath); err == nil {
