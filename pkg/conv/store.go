@@ -80,11 +80,11 @@ func NewStore(cfg StoreConfig) (*Store, error) {
 // OpenStore opens an existing store.
 func OpenStore(dbPath string) (*Store, error) {
 	dsn := dbPath
-	if !strings.HasPrefix(dsn, "file:") {
+	if sqliteDriverName == "libsql" && !strings.HasPrefix(dsn, "file:") {
 		dsn = "file:" + dsn
 	}
 
-	db, err := sql.Open("libsql", dsn)
+	db, err := sql.Open(sqliteDriverName, dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -254,10 +254,19 @@ func (s *Store) StoreSession(ctx context.Context, session *Session) error {
 // StoreTurnEmbedding stores an embedding for a turn.
 func (s *Store) StoreTurnEmbedding(ctx context.Context, turnID string, embedding []float32) error {
 	blob := float32ToBlob(embedding)
-	_, err := s.db.ExecContext(ctx, `
-		INSERT OR REPLACE INTO conv_turn_embeddings (turn_id, embedding)
-		VALUES (?, vector32(?))
-	`, turnID, blob)
+	var err error
+	if sqliteDriverName == "libsql" {
+		_, err = s.db.ExecContext(ctx, `
+			INSERT OR REPLACE INTO conv_turn_embeddings (turn_id, embedding)
+			VALUES (?, vector32(?))
+		`, turnID, blob)
+	} else {
+		// For sqlite3, store raw blob
+		_, err = s.db.ExecContext(ctx, `
+			INSERT OR REPLACE INTO conv_turn_embeddings (turn_id, embedding)
+			VALUES (?, ?)
+		`, turnID, blob)
+	}
 	return err
 }
 
@@ -273,10 +282,14 @@ func (s *Store) StoreTurnEmbeddingBatch(ctx context.Context, turnIDs []string, e
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	stmt, err := tx.PrepareContext(ctx, `
-		INSERT OR REPLACE INTO conv_turn_embeddings (turn_id, embedding)
-		VALUES (?, vector32(?))
-	`)
+	var stmtSQL string
+	if sqliteDriverName == "libsql" {
+		stmtSQL = `INSERT OR REPLACE INTO conv_turn_embeddings (turn_id, embedding) VALUES (?, vector32(?))`
+	} else {
+		stmtSQL = `INSERT OR REPLACE INTO conv_turn_embeddings (turn_id, embedding) VALUES (?, ?)`
+	}
+
+	stmt, err := tx.PrepareContext(ctx, stmtSQL)
 	if err != nil {
 		return err
 	}
