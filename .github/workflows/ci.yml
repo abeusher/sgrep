@@ -44,6 +44,7 @@ jobs:
       - name: Test (${{ matrix.backend }})
         env:
           CGO_CFLAGS: "-DSQLITE_ENABLE_FTS5"
+          CGO_LDFLAGS: "-lm"
         run: go test ${{ matrix.tags }} -v -short -race -coverprofile=coverage.txt -covermode=atomic ./...
       
       - name: Upload coverage
