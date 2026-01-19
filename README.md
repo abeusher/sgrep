@@ -94,6 +94,42 @@ sgrep watch .
 
 The embedding server starts automatically when needed and stays running as a daemon.
 
+## Conversation Search
+
+Search across conversations from Claude Code, Codex CLI, and Cursor.
+
+```bash
+# Index conversations (auto-starts embedding server)
+sgrep conv index
+
+# Index a single agent
+sgrep conv index --source claude
+sgrep conv index --source codex
+sgrep conv index --source cursor
+
+# Search conversations
+sgrep conv "authentication"
+sgrep conv "JWT token" --hybrid
+sgrep conv "database migration" --agent claude --since 7d
+
+# View, export, or resume a session
+sgrep conv view <session_id>
+sgrep conv export <session_id> -o conversation.md
+sgrep conv resume <session_id>
+
+# Extract context for injection into new session
+sgrep conv context <session_id>
+
+# Copy to clipboard
+sgrep conv copy <session_id>
+
+# Check index status
+sgrep conv status
+```
+
+Conversations are stored at `~/.sgrep/conversations/conv.db`. Re-running
+`sgrep conv index` backfills missing embeddings for existing sessions.
+
 ## Hybrid Search
 
 Hybrid search combines **semantic understanding** with **lexical matching (BM25)** for improved accuracy. This helps when:

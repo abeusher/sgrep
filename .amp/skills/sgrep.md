@@ -1,16 +1,23 @@
-# sgrep - Smart Code Search Skill
+# sgrep - Smart Code & Conversation Search Skill
 
 ## Purpose
 
-Use `sgrep` for semantic and hybrid code search when you need to find code by **intent** rather than exact text patterns.
+Use `sgrep` for semantic and hybrid search across **code** and **agent conversations** when you need to find content by **intent** rather than exact text patterns.
 
 ## When to Use This Skill
 
+### Code Search
 - Searching for concepts: "error handling", "authentication", "caching logic"
 - Searching with specific terms + context: use `--hybrid` for "JWT validation", "OAuth2 token"
 - Exploring unfamiliar codebases
 - When ripgrep patterns keep missing relevant code
 - Finding implementations of features described in natural language
+
+### Conversation Search
+- Finding past discussions with **Claude Code**, **Codex CLI**, or **Cursor**
+- Recalling how a similar problem was solved before
+- Building context from previous sessions for new tasks
+- Searching across all coding agent interactions
 
 ## Setup (One-time)
 
@@ -105,6 +112,37 @@ sgrep --hybrid --semantic-weight 0.4 --bm25-weight 0.6 "parseConfig"
 sgrep --hybrid --semantic-weight 0.8 --bm25-weight 0.2 "configuration loading"
 ```
 
+## Conversation Search
+
+Search across conversations with Claude Code, Codex CLI, and Cursor.
+
+### Commands
+
+| Command | Purpose |
+|---------|---------|
+| `sgrep conv "query"` | Semantic search across all agents |
+| `sgrep conv "query" --agent claude` | Filter by agent |
+| `sgrep conv "query" --since 7d` | Filter by time |
+| `sgrep conv "query" --project myapp` | Filter by project |
+| `sgrep conv "query" --hybrid` | Semantic + keyword search |
+| `sgrep conv view <session-id>` | View full conversation |
+| `sgrep conv context <session-id>` | Extract context for new session |
+| `sgrep conv index` | Index/update conversations |
+| `sgrep conv status` | Check index status |
+
+### Example Workflow
+
+```bash
+# Find how you fixed a similar bug before
+sgrep conv "race condition fix" --since 1m
+
+# Search Claude Code sessions for a specific project
+sgrep conv "database migration" --agent claude --project myapp
+
+# Get context from a past session to inject into current work
+sgrep conv context abc123
+```
+
 ## Tips
 
 - Use natural language queries: "how does the cache invalidation work"
@@ -112,6 +150,7 @@ sgrep --hybrid --semantic-weight 0.8 --bm25-weight 0.2 "configuration loading"
 - Combine with `-c` flag to see code snippets
 - Use `--json` when parsing results programmatically
 - Server auto-starts; use `sgrep server stop` to free resources when done
+- Run `sgrep conv index` periodically to keep conversation index updated
 
 ## Troubleshooting
 

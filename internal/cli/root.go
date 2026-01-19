@@ -862,6 +862,26 @@ sgrep -c "authentication middleware"
 sgrep --json "rate limiting"
 ` + "```" + `
 
+## Conversation Search
+
+Use conversation search when the user asks about previous discussions, decisions, or agent reasoning.
+
+` + "```" + `bash
+# Index conversations (Claude Code, Codex CLI, Cursor)
+sgrep conv index
+
+# Search conversations
+sgrep conv "hybrid ranking"
+sgrep conv "embedding server" --hybrid
+sgrep conv "auth decision" --agent claude --since 30d
+
+# View or export a session
+sgrep conv view <session_id>
+sgrep conv context <session_id>
+` + "```" + `
+
+**Use sgrep conv for conversation history; use sgrep for code.**
+
 ## Semantic vs Hybrid
 
 | Mode | Best For | Example |

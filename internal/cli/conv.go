@@ -475,6 +475,7 @@ func runConvIndex(cmd *cobra.Command, args []string) error {
 	indexer := conv.NewIndexer(conv.IndexerConfig{
 		Store:    store,
 		Embedder: embedder,
+		Force:    convIndexForce,
 	})
 
 	// Determine which parsers to use
