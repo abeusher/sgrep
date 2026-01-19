@@ -729,6 +729,21 @@ func (s *Store) GetTurnContentBatch(ctx context.Context, turnIDs []string) (map[
 	return result, rows.Err()
 }
 
+// MissingEmbeddingsCountForSession returns how many turns in a session lack embeddings.
+func (s *Store) MissingEmbeddingsCountForSession(ctx context.Context, sessionID string) (int, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM conv_turns t
+		WHERE t.session_id = ?
+		  AND NOT EXISTS (
+			SELECT 1 FROM conv_turn_embeddings e
+			WHERE e.turn_id = t.id
+			   OR e.turn_id LIKE t.id || ':%'
+		  )
+	`, sessionID).Scan(&count)
+	return count, err
+}
+
 // SessionExists checks if a session already exists.
 func (s *Store) SessionExists(ctx context.Context, sessionID string) (bool, error) {
 	var count int

@@ -108,30 +108,49 @@ func (p *CursorParser) Discover() ([]string, error) {
 
 // Parse reads a Cursor SQLite database and returns sessions.
 func (p *CursorParser) Parse(sourcePath string) ([]*conv.Session, error) {
-	db, err := sql.Open("libsql", "file:"+sourcePath+"?mode=ro")
+	dsn := sourcePath
+	if sqliteDriverName == "libsql" && !strings.HasPrefix(dsn, "file:") {
+		dsn = "file:" + dsn + "?mode=ro"
+	}
+	db, err := sql.Open(sqliteDriverName, dsn)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = db.Close() }()
 
-	// Query for chat data
+	// Query for chat data (legacy key)
 	var chatDataJSON string
 	err = db.QueryRow(`
 		SELECT value FROM ItemTable
 		WHERE key = 'workbench.panel.aichat.view.aichat.chatdata'
 	`).Scan(&chatDataJSON)
 
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
+	var chatData cursorChatData
+	if err == nil && chatDataJSON != "" {
+		if err := json.Unmarshal([]byte(chatDataJSON), &chatData); err != nil {
+			return nil, err
+		}
+	} else if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 
-	// Parse JSON
-	var chatData cursorChatData
-	if err := json.Unmarshal([]byte(chatDataJSON), &chatData); err != nil {
-		return nil, err
+	// Fall back to aiService keys used by newer Cursor versions
+	if len(chatData.Tabs) == 0 {
+		var promptsJSON string
+		err = db.QueryRow(`SELECT value FROM ItemTable WHERE key = 'aiService.prompts'`).Scan(&promptsJSON)
+		if err != nil && err != sql.ErrNoRows {
+			return nil, err
+		}
+		var generationsJSON string
+		err = db.QueryRow(`SELECT value FROM ItemTable WHERE key = 'aiService.generations'`).Scan(&generationsJSON)
+		if err != nil && err != sql.ErrNoRows {
+			return nil, err
+		}
+
+		chatData, err = parseCursorAIService(promptsJSON, generationsJSON)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Also try to get workspace info for project path
@@ -167,6 +186,77 @@ func (p *CursorParser) Parse(sourcePath string) ([]*conv.Session, error) {
 	}
 
 	return sessions, nil
+}
+
+type cursorPrompt struct {
+	Text string `json:"text"`
+}
+
+type cursorGeneration struct {
+	TextDescription string `json:"textDescription"`
+}
+
+func parseCursorAIService(promptsJSON, generationsJSON string) (cursorChatData, error) {
+	if promptsJSON == "" && generationsJSON == "" {
+		return cursorChatData{}, nil
+	}
+
+	var prompts []cursorPrompt
+	if promptsJSON != "" {
+		if err := json.Unmarshal([]byte(promptsJSON), &prompts); err != nil {
+			return cursorChatData{}, err
+		}
+	}
+
+	var generations []cursorGeneration
+	if generationsJSON != "" {
+		if err := json.Unmarshal([]byte(generationsJSON), &generations); err != nil {
+			return cursorChatData{}, err
+		}
+	}
+
+	if len(prompts) == 0 && len(generations) == 0 {
+		return cursorChatData{}, nil
+	}
+
+	var conversation []cursorConversation
+	maxLen := len(prompts)
+	if len(generations) > maxLen {
+		maxLen = len(generations)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		if i < len(prompts) {
+			text := strings.TrimSpace(prompts[i].Text)
+			if text != "" {
+				conversation = append(conversation, cursorConversation{
+					Role:    "user",
+					Content: text,
+				})
+			}
+		}
+		if i < len(generations) {
+			text := strings.TrimSpace(generations[i].TextDescription)
+			if text != "" {
+				conversation = append(conversation, cursorConversation{
+					Role:    "assistant",
+					Content: text,
+				})
+			}
+		}
+	}
+
+	if len(conversation) == 0 {
+		return cursorChatData{}, nil
+	}
+
+	return cursorChatData{
+		Tabs: []cursorTab{{
+			TabID:        "cursor-aiservice",
+			ChatTitle:    "Cursor AI Service",
+			Conversation: conversation,
+		}},
+	}, nil
 }
 
 // tabToSession converts a Cursor tab to a Session.

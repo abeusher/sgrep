@@ -13,6 +13,7 @@ type Indexer struct {
 	store    *Store
 	embedder *embed.Embedder
 	chunker  *Chunker
+	force    bool
 }
 
 // IndexerConfig configures the indexer.
@@ -20,6 +21,7 @@ type IndexerConfig struct {
 	Store    *Store
 	Embedder *embed.Embedder
 	Chunker  *Chunker
+	Force    bool // Re-index even if session exists
 }
 
 // NewIndexer creates a new conversation indexer.
@@ -33,6 +35,7 @@ func NewIndexer(cfg IndexerConfig) *Indexer {
 		store:    cfg.Store,
 		embedder: cfg.Embedder,
 		chunker:  chunker,
+		force:    cfg.Force,
 	}
 }
 
@@ -58,10 +61,19 @@ func (idx *Indexer) IndexSessions(ctx context.Context, sessions []*Session) (*In
 	for _, session := range sessions {
 		result.SessionsFound++
 
-		// Check if already indexed
-		exists, _ := idx.store.SessionExists(ctx, session.ID)
-		if exists {
-			continue
+		// Check if already indexed (skip if not forcing)
+		if !idx.force {
+			exists, _ := idx.store.SessionExists(ctx, session.ID)
+			if exists {
+				missing, err := idx.store.MissingEmbeddingsCountForSession(ctx, session.ID)
+				if err != nil {
+					result.Errors = append(result.Errors, fmt.Errorf("check missing embeddings for %s failed: %w", session.ID, err))
+					continue
+				}
+				if missing == 0 {
+					continue
+				}
+			}
 		}
 
 		// Index the session
@@ -102,6 +114,14 @@ func (idx *Indexer) indexSession(ctx context.Context, session *Session) error {
 	// Generate and store embeddings for each turn
 	chunks := idx.chunker.ChunkSession(session)
 
+	// Skip embedding if no embedder
+	if idx.embedder == nil {
+		fmt.Println("DEBUG: embedder is nil, skipping embeddings")
+		return nil
+	}
+
+	fmt.Printf("DEBUG: processing %d chunks for embeddings\n", len(chunks))
+
 	// Batch process embeddings
 	batchSize := 10
 	for i := 0; i < len(chunks); i += batchSize {
@@ -124,10 +144,13 @@ func (idx *Indexer) indexSession(ctx context.Context, session *Session) error {
 			return fmt.Errorf("failed to generate embeddings: %w", err)
 		}
 
+		fmt.Printf("DEBUG: got %d embeddings, storing...\n", len(embeddings))
+
 		// Store embeddings
 		if err := idx.store.StoreTurnEmbeddingBatch(ctx, turnIDs, embeddings); err != nil {
 			return fmt.Errorf("failed to store embeddings: %w", err)
 		}
+		fmt.Println("DEBUG: stored embeddings successfully")
 	}
 
 	return nil
