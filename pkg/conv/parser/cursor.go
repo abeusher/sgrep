@@ -108,11 +108,7 @@ func (p *CursorParser) Discover() ([]string, error) {
 
 // Parse reads a Cursor SQLite database and returns sessions.
 func (p *CursorParser) Parse(sourcePath string) ([]*conv.Session, error) {
-	dsn := sourcePath
-	if sqliteDriverName == "libsql" && !strings.HasPrefix(dsn, "file:") {
-		dsn = "file:" + dsn + "?mode=ro"
-	}
-	db, err := sql.Open(sqliteDriverName, dsn)
+	db, err := openCursorDB(sourcePath)
 	if err != nil {
 		return nil, err
 	}
