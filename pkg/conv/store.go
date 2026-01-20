@@ -751,6 +751,33 @@ func (s *Store) SessionExists(ctx context.Context, sessionID string) (bool, erro
 	return count > 0, err
 }
 
+// SessionMeta contains lightweight session metadata for update checks.
+type SessionMeta struct {
+	TotalTurns int
+	EndedAt    time.Time
+}
+
+// GetSessionMeta returns lightweight session metadata.
+func (s *Store) GetSessionMeta(ctx context.Context, sessionID string) (SessionMeta, bool, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT total_turns, ended_at
+		FROM conv_sessions WHERE id = ?
+	`, sessionID)
+
+	var meta SessionMeta
+	var endedAt sql.NullTime
+	if err := row.Scan(&meta.TotalTurns, &endedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return SessionMeta{}, false, nil
+		}
+		return SessionMeta{}, false, err
+	}
+	if endedAt.Valid {
+		meta.EndedAt = endedAt.Time
+	}
+	return meta, true, nil
+}
+
 // float32ToBlob converts a float32 slice to bytes.
 func float32ToBlob(embedding []float32) []byte {
 	buf := make([]byte, len(embedding)*4)

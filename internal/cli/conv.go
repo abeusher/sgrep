@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/XiaoConstantine/sgrep/pkg/conv"
@@ -64,12 +66,13 @@ func init() {
 	parser.RegisterClaude()
 	parser.RegisterCodex()
 	parser.RegisterCursor()
+	parser.RegisterOpenCode()
 }
 
 var convCmd = &cobra.Command{
 	Use:   "conv [search] <query>",
 	Short: "Search and manage coding agent conversations",
-	Long: `Search across conversations from Claude Code, Codex CLI, and Cursor.
+	Long: `Search across conversations from Claude Code, Codex CLI, Cursor, and OpenCode.
 
 Examples:
   # Basic semantic search
@@ -90,7 +93,8 @@ Examples:
 
   # Index conversations
   sgrep conv index
-  sgrep conv index --source claude`,
+  sgrep conv index --source claude
+  sgrep conv index --source opencode`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runConvSearch,
 }
@@ -105,7 +109,7 @@ func init() {
 	convCmd.Flags().BoolVar(&convExact, "exact", false, "Exact keyword match only (no semantic)")
 
 	// Filter flags
-	convCmd.Flags().StringVarP(&convAgent, "agent", "a", "all", "Filter by agent: claude, codex, cursor, all")
+	convCmd.Flags().StringVarP(&convAgent, "agent", "a", "all", "Filter by agent: claude, codex, cursor, opencode, all")
 	convCmd.Flags().StringVarP(&convProject, "project", "p", "", "Filter by project name or path")
 	convCmd.Flags().StringVar(&convSince, "since", "", "Conversations since: 1h, 7d, 2w, 1m, 1y")
 	convCmd.Flags().StringVar(&convAfter, "after", "", "Conversations after date (YYYY-MM-DD)")
@@ -215,7 +219,7 @@ func init() {
 	convCopyCmd.Flags().BoolVar(&convCopyFull, "full", false, "Copy full conversation")
 
 	// Index flags
-	convIndexCmd.Flags().StringVar(&convIndexSource, "source", "", "Index specific source: claude, codex, aider, cursor")
+	convIndexCmd.Flags().StringVar(&convIndexSource, "source", "", "Index specific source: claude, codex, aider, cursor, opencode")
 	convIndexCmd.Flags().BoolVar(&convIndexForce, "force", false, "Re-index all (ignore cache)")
 	convIndexCmd.Flags().BoolVar(&convIndexWatch, "watch", false, "Watch for new conversations")
 }
@@ -455,6 +459,20 @@ func runConvCopy(cmd *cobra.Command, args []string) error {
 
 func runConvIndex(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+	var cancel context.CancelFunc
+	if convIndexWatch {
+		ctx, cancel = context.WithCancel(ctx)
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+		go func() {
+			<-signals
+			cancel()
+		}()
+		defer func() {
+			signal.Stop(signals)
+			close(signals)
+		}()
+	}
 
 	// Open or create store
 	store, err := openConvStore()
@@ -488,6 +506,10 @@ func runConvIndex(cmd *cobra.Command, args []string) error {
 		parsers = append(parsers, p)
 	} else {
 		parsers = parser.All()
+	}
+
+	if convIndexWatch {
+		return watchConversations(ctx, indexer, parsers, convVerbose)
 	}
 
 	// Index from each parser

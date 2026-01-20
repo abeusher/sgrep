@@ -203,6 +203,7 @@ func TestParseAgentType(t *testing.T) {
 		{"claude", AgentClaudeCode},
 		{"codex", AgentCodexCLI},
 		{"cursor", AgentCursor},
+		{"opencode", AgentOpenCode},
 		{"unknown", AgentAll},
 		{"", AgentAll},
 	}

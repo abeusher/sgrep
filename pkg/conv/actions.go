@@ -23,9 +23,9 @@ func NewActions(store *Store) *Actions {
 
 // ViewOptions configures view output.
 type ViewOptions struct {
-	Turn     int  // Specific turn to view (-1 for all)
-	JSONOut  bool // Output as JSON
-	Verbose  bool // Show full content
+	Turn    int  // Specific turn to view (-1 for all)
+	JSONOut bool // Output as JSON
+	Verbose bool // Show full content
 }
 
 // View returns a session for viewing.
@@ -92,6 +92,9 @@ func (a *Actions) Resume(ctx context.Context, sessionID string, opts ResumeOptio
 		result.Command = "cursor"
 		result.Args = []string{session.ProjectPath}
 		// This will just open the project; user needs to find the chat manually
+	case AgentOpenCode:
+		result.Command = "opencode"
+		result.Args = []string{"--session", sessionID}
 
 	default:
 		return nil, fmt.Errorf("unsupported agent for resume: %s", session.Agent)
@@ -113,24 +116,24 @@ func (a *Actions) Resume(ctx context.Context, sessionID string, opts ResumeOptio
 
 // ContextOptions configures context extraction.
 type ContextOptions struct {
-	Turns       int    // Number of recent turns to include (default: 5)
-	Summary     bool   // Generate condensed summary
-	Format      string // Output format: prompt, markdown, json
-	Copy        bool   // Copy to clipboard
+	Turns   int    // Number of recent turns to include (default: 5)
+	Summary bool   // Generate condensed summary
+	Format  string // Output format: prompt, markdown, json
+	Copy    bool   // Copy to clipboard
 }
 
 // ContextResult contains extracted context.
 type ContextResult struct {
-	SessionID     string    `json:"session_id"`
-	Agent         AgentType `json:"agent"`
-	Project       string    `json:"project"`
-	Date          time.Time `json:"date"`
-	Topic         string    `json:"topic,omitempty"`
-	Summary       string    `json:"summary,omitempty"`
-	KeyPoints     []string  `json:"key_points,omitempty"`
-	LastTurns     []Turn    `json:"last_turns"`
-	ResumeCommand string    `json:"resume_command"`
-	FormattedOutput string  `json:"-"` // For CLI display
+	SessionID       string    `json:"session_id"`
+	Agent           AgentType `json:"agent"`
+	Project         string    `json:"project"`
+	Date            time.Time `json:"date"`
+	Topic           string    `json:"topic,omitempty"`
+	Summary         string    `json:"summary,omitempty"`
+	KeyPoints       []string  `json:"key_points,omitempty"`
+	LastTurns       []Turn    `json:"last_turns"`
+	ResumeCommand   string    `json:"resume_command"`
+	FormattedOutput string    `json:"-"` // For CLI display
 }
 
 // ExtractContext extracts context from a session for injection into new sessions.
@@ -271,6 +274,8 @@ func GenerateResumeCommand(session *Session) string {
 		return fmt.Sprintf("codex resume %s", session.ID)
 	case AgentCursor:
 		return fmt.Sprintf("# Open Cursor: %s", session.ProjectPath)
+	case AgentOpenCode:
+		return fmt.Sprintf("opencode --session %s", session.ID)
 	default:
 		return ""
 	}

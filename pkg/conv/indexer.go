@@ -65,13 +65,31 @@ func (idx *Indexer) IndexSessions(ctx context.Context, sessions []*Session) (*In
 		if !idx.force {
 			exists, _ := idx.store.SessionExists(ctx, session.ID)
 			if exists {
-				missing, err := idx.store.MissingEmbeddingsCountForSession(ctx, session.ID)
+				meta, ok, err := idx.store.GetSessionMeta(ctx, session.ID)
 				if err != nil {
-					result.Errors = append(result.Errors, fmt.Errorf("check missing embeddings for %s failed: %w", session.ID, err))
+					result.Errors = append(result.Errors, fmt.Errorf("check session meta for %s failed: %w", session.ID, err))
 					continue
 				}
-				if missing == 0 {
-					continue
+				needsUpdate := false
+				if ok {
+					if len(session.Turns) > meta.TotalTurns {
+						needsUpdate = true
+					}
+					if !session.EndedAt.IsZero() && (meta.EndedAt.IsZero() || session.EndedAt.After(meta.EndedAt)) {
+						needsUpdate = true
+					}
+				}
+				if needsUpdate {
+					// Fall through to re-index updated session.
+				} else {
+					missing, err := idx.store.MissingEmbeddingsCountForSession(ctx, session.ID)
+					if err != nil {
+						result.Errors = append(result.Errors, fmt.Errorf("check missing embeddings for %s failed: %w", session.ID, err))
+						continue
+					}
+					if missing == 0 {
+						continue
+					}
 				}
 			}
 		}

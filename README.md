@@ -96,7 +96,7 @@ The embedding server starts automatically when needed and stays running as a dae
 
 ## Conversation Search
 
-Search across conversations from Claude Code, Codex CLI, and Cursor.
+Search across conversations from Claude Code, Codex CLI, Cursor, and OpenCode.
 
 ```bash
 # Index conversations (auto-starts embedding server)
@@ -106,6 +106,10 @@ sgrep conv index
 sgrep conv index --source claude
 sgrep conv index --source codex
 sgrep conv index --source cursor
+sgrep conv index --source opencode
+
+# Watch mode (auto-index new conversations)
+sgrep conv index --watch
 
 # Search conversations
 sgrep conv "authentication"
@@ -126,6 +130,8 @@ sgrep conv copy <session_id>
 # Check index status
 sgrep conv status
 ```
+
+**Watch mode** monitors conversation directories for all agents and automatically indexes new sessions as they're created. This ensures your conversation search stays up-to-date without manual re-indexing.
 
 Conversations are stored at `~/.sgrep/conversations/conv.db`. Re-running
 `sgrep conv index` backfills missing embeddings for existing sessions.

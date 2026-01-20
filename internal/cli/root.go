@@ -867,7 +867,7 @@ sgrep --json "rate limiting"
 Use conversation search when the user asks about previous discussions, decisions, or agent reasoning.
 
 ` + "```" + `bash
-# Index conversations (Claude Code, Codex CLI, Cursor)
+# Index conversations (Claude Code, Codex CLI, Cursor, OpenCode)
 sgrep conv index
 
 # Search conversations

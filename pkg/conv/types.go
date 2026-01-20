@@ -1,4 +1,4 @@
-// Package conv provides conversation search across coding agents (Claude Code, Codex CLI, Cursor).
+// Package conv provides conversation search across coding agents (Claude Code, Codex CLI, Cursor, OpenCode).
 package conv
 
 import (
@@ -12,6 +12,7 @@ const (
 	AgentClaudeCode AgentType = "claude"
 	AgentCodexCLI   AgentType = "codex"
 	AgentCursor     AgentType = "cursor"
+	AgentOpenCode   AgentType = "opencode"
 	AgentAll        AgentType = "all"
 )
 
@@ -24,6 +25,8 @@ func ParseAgentType(s string) AgentType {
 		return AgentCodexCLI
 	case "cursor":
 		return AgentCursor
+	case "opencode":
+		return AgentOpenCode
 	default:
 		return AgentAll
 	}
@@ -106,12 +109,12 @@ type ConversationHit struct {
 
 // TurnPreview shows a snippet of the matched turn.
 type TurnPreview struct {
-	TurnIndex   int      `json:"turn_index"`
-	UserSnip    string   `json:"user_snip"`      // Max 80 chars
-	AssistSnip  string   `json:"assistant_snip"` // Max 100 chars
-	Highlights  []string `json:"highlights,omitempty"`
-	FullUser    string   `json:"full_user,omitempty"`    // Full user content (for verbose output)
-	FullAssist  string   `json:"full_assist,omitempty"`  // Full assistant content (for verbose output)
+	TurnIndex  int      `json:"turn_index"`
+	UserSnip   string   `json:"user_snip"`      // Max 80 chars
+	AssistSnip string   `json:"assistant_snip"` // Max 100 chars
+	Highlights []string `json:"highlights,omitempty"`
+	FullUser   string   `json:"full_user,omitempty"`   // Full user content (for verbose output)
+	FullAssist string   `json:"full_assist,omitempty"` // Full assistant content (for verbose output)
 }
 
 // HitActions contains ready-to-run commands.
@@ -183,24 +186,24 @@ type ContextOutput struct {
 
 // IndexStats contains statistics about indexed conversations.
 type IndexStats struct {
-	TotalSessions int                  `json:"total_sessions"`
-	TotalTurns    int                  `json:"total_turns"`
-	TotalTokens   int                  `json:"total_tokens"`
-	SessionsByAgent map[AgentType]int  `json:"sessions_by_agent"`
-	LastIndexed   time.Time            `json:"last_indexed"`
-	IndexSizeBytes int64               `json:"index_size_bytes"`
+	TotalSessions   int               `json:"total_sessions"`
+	TotalTurns      int               `json:"total_turns"`
+	TotalTokens     int               `json:"total_tokens"`
+	SessionsByAgent map[AgentType]int `json:"sessions_by_agent"`
+	LastIndexed     time.Time         `json:"last_indexed"`
+	IndexSizeBytes  int64             `json:"index_size_bytes"`
 }
 
 // TurnDocument represents an indexed turn for vector search.
 // This is the unit that gets embedded and stored.
 type TurnDocument struct {
-	ID            string    `json:"id"`            // session_id:turn_index
+	ID            string    `json:"id"` // session_id:turn_index
 	SessionID     string    `json:"session_id"`
 	TurnIndex     int       `json:"turn_index"`
-	Content       string    `json:"content"`       // Combined user + assistant content
+	Content       string    `json:"content"` // Combined user + assistant content
 	UserContent   string    `json:"user_content"`
 	AssistContent string    `json:"assistant_content"`
-	Embedding     []float32 `json:"-"`             // Vector embedding
+	Embedding     []float32 `json:"-"` // Vector embedding
 	Agent         AgentType `json:"agent"`
 	ProjectPath   string    `json:"project_path"`
 	Timestamp     time.Time `json:"timestamp"`
